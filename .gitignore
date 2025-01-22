@@ -1,0 +1,19 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+
+# Environment variables
+.env
+
+# Build directories
+dist/
+build/
+
+# IDE specific files
+.vscode/
+.idea/
+
+package-lock.json
