@@ -9,8 +9,21 @@ const authRoutes = require('./routes/authRoutes'); // Importer les routes d'auth
 
 const app = express();
 
-// Connexion à MongoDB
-//mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+// Middleware pour parser le JSON
+app.use(express.json()); // Ajout du middleware pour traiter le JSON
+
+/// DATABASE CONNECTION
+mongoose.connect(
+  process.env.NODE_ENV === 'production'
+    ? process.env.PROD_DATABASE
+    : process.env.DEV_DATABASE
+)
+.then(() => {
+  console.log('Connected to the database');
+})
+.catch((err) => {
+  console.error('Database connection error:', err);
+});
 
 // Configurer les sessions
 app.use(session({
@@ -18,6 +31,7 @@ app.use(session({
     resave: false,
     saveUninitialized: true
 }));
+
 // Configurer la stratégie Google pour Passport
 passport.use(
     new GoogleStrategy({
@@ -37,7 +51,13 @@ app.use(passport.session());
 // Utiliser les routes d'authentification
 app.use('/', authRoutes);
 
+// PORT
+const PORT = process.env.PORT || 3000;
 // Démarrer le serveur
-app.listen(3000, () => {
-    console.log(`Server is running at port 3000`);
+app.listen(PORT, (err) => {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(`Listening on PORT ${PORT}`);
+    }
 });
