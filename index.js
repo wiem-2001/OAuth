@@ -3,20 +3,24 @@ const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const mongoose = require('mongoose');
+const cookieParser = require('cookie-parser');
 const GoogleStrategy = require('passport-google-oauth20').Strategy; // Stratégie OAuth pour Google
 
-const authRoutes = require('./routes/authRoutes'); // Importer les routes d'authentification
-
+const authRoutes = require('./routes/authRoutes'); 
+const userRoutes=require('./routes/userRoutes');
 const app = express();
 
-// Middleware pour parser le JSON
-app.use(express.json()); // Ajout du middleware pour traiter le JSON
+app.use(express.json()); 
 
 /// DATABASE CONNECTION
 mongoose.connect(
   process.env.NODE_ENV === 'production'
     ? process.env.PROD_DATABASE
-    : process.env.DEV_DATABASE
+    : process.env.DEV_DATABASE,
+  {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }
 )
 .then(() => {
   console.log('Connected to the database');
@@ -47,8 +51,8 @@ passport.use(
 
 app.use(passport.initialize());
 app.use(passport.session());
-
-// Utiliser les routes d'authentification
+app.use(cookieParser());  
+app.use('/user',userRoutes);
 app.use('/', authRoutes);
 
 // PORT

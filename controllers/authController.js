@@ -1,7 +1,7 @@
 const passport = require('passport');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto'); // Ensure crypto is imported
+const crypto = require('crypto'); 
 const {
     singUpConfirmationEmailTemplate,
 } = require('../template/userAccountEmailTemplates');
@@ -17,23 +17,19 @@ exports.getProfile = (req, res) => {
     res.send(`Welcome ${req.user.displayName}`);
 };
 
-// Serialize user
+
 passport.serializeUser((user, done) => done(null, user));
-
-// Deserialize user
 passport.deserializeUser((user, done) => done(null, user));
-
 exports.logout = (req, res) => {
     req.logout(() => {
         res.redirect("/");
     });
 };
 
-// Sign up function
+
 exports.signUp = async (req, res) => {
     try {
         const { email, password, fullName } = req.body;
-
         if (!email || !password) {
             return res.status(403).json({
                 success: false,
@@ -54,13 +50,11 @@ exports.signUp = async (req, res) => {
             password,
             confirmationCode: crypto.randomBytes(20).toString('hex'),
             fullName,
-            is_active: false, // Make sure to initialize is_active
-            role: 'user', // Set a default role if needed
+            is_active: false, 
+            role: 'user', 
             joined_at: new Date(),
         });
-
         await newUser.save();
-
         const template = singUpConfirmationEmailTemplate(
             newUser.fullName,
             API_ENDPOINT,
@@ -74,9 +68,7 @@ exports.signUp = async (req, res) => {
             subject: 'Confirmation de votre enregistrement sur l’application',
             html: template,
         };
-
         await sendEmail(data);
-
         return res.json({
             message: "Veuillez vérifier votre e-mail pour plus d'instructions",
         });
@@ -88,22 +80,17 @@ exports.signUp = async (req, res) => {
         });
     }
 };
+
 exports.signIn = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // Find the user by email
     const foundUser = await User.findOne({ email });
-
-    // If user not found or password doesn't match, return error
     if (!foundUser || !foundUser.comparePassword(password)) {
       return res.status(403).json({
         success: false,
         message: "Échec de l'authentification, email ou mot de passe incorrect",
       });
     }
-
-    // Check if user account is active
     if (!foundUser.is_active) {
       return res.status(405).json({
         success: false,
@@ -111,21 +98,30 @@ exports.signIn = async (req, res) => {
           "Votre compte n'est pas activé ! Merci de consulter votre email ou contacter l'équipe",
       });
     }
-
-    // Generate JWT token
-    const token = jwt.sign(foundUser.toJSON(), process.env.SECRET, {
-      expiresIn: '7d', // Token expires in 7 days
+    const accessToken = jwt.sign({ userId: foundUser._id }, process.env.ACCESS_TOKEN_SECRET, {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRATION,
     });
 
-    // Return success response with token and user information
+    const refreshToken = jwt.sign({ userId: foundUser._id }, process.env.REFRESH_TOKEN_SECRET, {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRATION
+    });
+    const hashedRefreshToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    foundUser.refreshToken = hashedRefreshToken;
+    await foundUser.save();
+
+    // Set the refresh token in an HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+      sameSite: 'strict', // Prevent CSRF attacks
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
     return res.json({
       success: true,
-      token,
+      accessToken,
       user: {
-        _id: foundUser._id,
         email: foundUser.email,
         fullName: foundUser.fullName,
-        role: foundUser.role,
       },
     });
   } catch (error) {
@@ -136,3 +132,7 @@ exports.signIn = async (req, res) => {
     });
   }
 };
+
+
+
+

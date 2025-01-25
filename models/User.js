@@ -9,36 +9,27 @@ const UserSchema = new Schema({
   fullName: String,
   photo: String,
   is_active: Boolean,
-  role: { type: String, require: true }, // is_manager, is_admin, is_user
+  role: { type: String, require: true },
   confirmationCode: String,
   resetPasswordToken: String,
   resetPasswordExpires: String,
   joined_at: Date,
   updated_at: Date,
+  refreshToken: String, 
 });
 
-/* -------------------------------------------------------------------------- */
-/*                              PASSWORD HELPERS                              */
-/* -------------------------------------------------------------------------- */
-/**
- * Encrypt password before saving users objects int database we need to run
- * this encrypt than save it. (pre save)
- */
 UserSchema.pre('save', function (next) {
   let user = this;
   if (this.isModified('password' || this.isNew)) {
-    // generate 10 length random characters
     bcrypt.genSalt(10, function (err, salt) {
       if (err) {
         return next(err);
       }
-      // mix the 10 length random characters with user password => output the hash
       bcrypt.hash(user.password, salt, null, function (err, hash) {
         if (err) {
           return next(err);
         }
         user.password = hash;
-        // we are done with the operation so let's move on
         next();
       });
     });
@@ -49,9 +40,8 @@ UserSchema.pre('save', function (next) {
 
 
 UserSchema.methods.comparePassword = function (password) {
-  let user = this; // this reference the user itself
+  let user = this;
   return bcrypt.compareSync(password, user.password);
 };
 
-// export User Schema
 module.exports = mongoose.model('User', UserSchema);
