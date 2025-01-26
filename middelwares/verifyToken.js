@@ -18,6 +18,7 @@ const verifyToken = async (req, res, next) => {
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         const refreshToken = req.cookies.refreshToken || req.headers['x-refresh-token'];
+       
         if (!refreshToken) {
           return res.status(403).json({
             success: false,
@@ -45,6 +46,7 @@ const verifyToken = async (req, res, next) => {
             expiresIn: '5m',
           });
           res.set('x-new-access-token', newAccessToken);
+
           req.decoded = decodedRefresh;
           next();
         } catch (refreshErr) {

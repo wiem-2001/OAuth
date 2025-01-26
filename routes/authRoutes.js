@@ -8,7 +8,6 @@ router.get("/", (req, res) => {
 router.get("/auth/google", authController.loginWithGoogle);
 router.get("/auth/google/callback", authController.googleCallback);
 router.get("/profile", authController.getProfile);
-router.get("/logout", authController.logout);
 router.post("/register", authController.signUp); 
 router.post("/signIn", authController.signIn); 
 

@@ -9,23 +9,86 @@ const { sendEmail, FROM_EMAIL, API_ENDPOINT } = require('../utils/helpers');
 
 exports.loginWithGoogle = passport.authenticate('google', { scope: ["profile", "email"] });
 
-exports.googleCallback = (req, res) => {
-    res.redirect('/profile');
+exports.googleCallback = async (req, res, next) => {
+  passport.authenticate('google', async (err, user, info) => {
+      if (err) {
+          return res.status(500).json({
+              success: false,
+              message: "Une erreur est survenue lors de l'authentification",
+              error: err.message,
+          });
+      }
+
+      if (!user) {
+          return res.status(401).json({
+              success: false,
+              message: "User not authenticated",
+          });
+      }
+
+      try {
+          const accessToken = jwt.sign(
+              { userId: user._id }, 
+              process.env.ACCESS_TOKEN_SECRET,
+              { expiresIn: process.env.ACCESS_TOKEN_EXPIRATION }
+          );
+
+          // Generate refresh token
+          const refreshToken = jwt.sign(
+              { userId: user._id }, 
+              process.env.REFRESH_TOKEN_SECRET,
+              { expiresIn: process.env.REFRESH_TOKEN_EXPIRATION }
+          );
+          const hashedRefreshToken = crypto
+              .createHash('sha256')
+              .update(refreshToken)
+              .digest('hex');
+
+          user.refreshToken = hashedRefreshToken;
+          await user.save();
+          res.cookie('refreshToken', refreshToken, {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'strict', // Prevent CSRF attacks
+              maxAge: 7 * 24 * 60 * 60 * 1000, 
+          });
+          return res.json({
+              success: true,
+              accessToken,
+              user: {
+                  email: user.email,
+                  fullName: user.fullName,
+              },
+          });
+      } catch (error) {
+          return res.status(500).json({
+              success: false,
+              message: "Une erreur est survenue lors de l'authentification",
+              error: error.message,
+          });
+      }
+  })(req, res, next);
 };
 
 exports.getProfile = (req, res) => {
-    res.send(`Welcome ${req.user.displayName}`);
+    if (!req.user) {
+        return res.redirect('/login');
+    }
+    res.send(`Welcome ${req.user.fullName}`);
 };
 
+passport.serializeUser((user, done) => {
+    done(null, user._id);
+});
 
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((user, done) => done(null, user));
-exports.logout = (req, res) => {
-    req.logout(() => {
-        res.redirect("/");
-    });
-};
-
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await User.findById(id);
+        done(null, user);
+    } catch (err) {
+        done(err, null);
+    }
+});
 
 exports.signUp = async (req, res) => {
     try {
@@ -112,9 +175,9 @@ exports.signIn = async (req, res) => {
     // Set the refresh token in an HTTP-only cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
-      sameSite: 'strict', // Prevent CSRF attacks
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict', 
+      maxAge: 7 * 24 * 60 * 60 * 1000, 
     });
     return res.json({
       success: true,
