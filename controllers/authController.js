@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto'); 
 const {
     singUpConfirmationEmailTemplate,
+    forgotPasswordEmailTemplate,
+    resetPasswordConfirmationEmailTemplate
 } = require('../template/userAccountEmailTemplates');
 const { sendEmail, FROM_EMAIL, API_ENDPOINT } = require('../utils/helpers');
 
@@ -196,6 +198,91 @@ exports.signIn = async (req, res) => {
   }
 };
 
+exports.forgetPassword = async (req,res)=>{
+    const user = await User.findOne({email : req.body.email});
+    try {
+    if(!user){
+        return res.status(404).json({message: "utilisateur introuvable"});
+    }
+    else {
+        const token = crypto.randomBytes(20).toString('hex');
+        user.resetPasswordToken = token
+        user.resetPasswordExpires= Date.now() + 3600000; 
+        await user.save();
+
+        const template = forgotPasswordEmailTemplate(
+            user.fullName,
+            user.email,
+            API_ENDPOINT,
+            token,
+        );
+
+        const data = {
+            from : FROM_EMAIL ,
+            to : user.email,
+            subject : 'Réinitialisation de votre mot de passe',
+            html : template
+        }
+
+        await sendEmail(data);
+
+        return res.json({message:"Veuillez vérifier votre e-mail pour plus d'instructions"});
+    }
+} catch (error) {
+    return res
+      .status(500)
+      .json({ message: 'Une erreur est survenue.', error: error.message });
+  }
+}
+
+exports.restPassword = async (req, res) => {
+    try {
+      // Find user by reset password token and check expiration
+      const user = await User.findOne({
+        resetPasswordToken: req.params.token,
+        resetPasswordExpires: { $gt: Date.now() },
+      });
+  
+      // If user not found or token expired, return error
+      if (!user) {
+        return res.status(400).json({
+          message:
+            'Le jeton de réinitialisation de mot de passe est invalide ou a expiré.',
+        });
+      }
+  
+      // Check if new password matches verification password
+      if (req.body.newPassword !== req.body.verifyPassword) {
+        return res
+          .status(422)
+          .json({ message: 'Le mot de passe ne correspondent pas.' });
+      }
+  
+      // Update user's password and clear reset token fields
+      user.password = req.body.newPassword;
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+  
+      // Send password reset confirmation email
+      const template = resetPasswordConfirmationEmailTemplate(user.fullName);
+      const data = {
+        to: user.email,
+        from: FROM_EMAIL,
+        subject: 'Confirmation de réinitialisation du mot de passe',
+        html: template,
+      };
+  
+      await sendEmail(data);
+  
+      return res.json({ message: 'Mot de passe réinitialisé avec succès.' });
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ message: 'Une erreur est survenue.', error: error.message });
+    }
+  };
+  
 
 
 
